@@ -1,66 +1,302 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+///////////////////Live Notifications//////////////////////////////////////////////////////
+step 1: composer create-project --prefer-dist laravel/laravel realtime-notifications///////
+step 2: composer require cboden/ratchet///////////////////////////////////////////////////
+Step 3: Creating the WebSocket Server/////////////////////////////////////////////////////
+Create a new file ratchet_server.php in the root of your Laravel project:
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+php
+Copy
+<?php
 
-## About Laravel
+require __DIR__ . '/vendor/autoload.php';
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+use Ratchet\MessageComponentInterface;
+use Ratchet\ConnectionInterface;
+use Ratchet\Server\IoServer;
+use Ratchet\Http\HttpServer;
+use Ratchet\WebSocket\WsServer;
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+class MyWebSocketServer implements MessageComponentInterface
+{
+    protected $clients;
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+    public function __construct()
+    {
+        $this->clients = new \SplObjectStorage;
+    }
 
-## Learning Laravel
+    public function onOpen(ConnectionInterface $conn)
+    {
+        // Store the new connection
+        $this->clients->attach($conn);
+        echo "New client connected: {$conn->resourceId}\n";
+    }
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+    public function onMessage(ConnectionInterface $from, $msg)
+    {
+        // Broadcast the message to all connected clients
+        foreach ($this->clients as $client) {
+            if ($client !== $from) {
+                $client->send($msg);
+            }
+        }
+        echo "Received message: $msg\n";
+    }
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+    public function onClose(ConnectionInterface $conn)
+    {
+        // Remove the connection when the client disconnects
+        $this->clients->detach($conn);
+        echo "Client disconnected: {$conn->resourceId}\n";
+    }
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+    public function onError(ConnectionInterface $conn, \Exception $e)
+    {
+        echo "An error occurred: {$e->getMessage()}\n";
+        $conn->close();
+    }
+}
 
-## Laravel Sponsors
+// Create the WebSocket server
+$server = IoServer::factory(
+    new HttpServer(
+        new WsServer(
+            new MyWebSocketServer()
+        )
+    ),
+    8080 // Port to listen on
+);
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+echo "WebSocket server is running on ws://0.0.0.0:8080\n";
 
-### Premium Partners
+// Start the server
+$server->run();
+You can run the WebSocket server using the following command:
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
 
-## Contributing
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
 
-## Code of Conduct
+step 4: php ratchet_server.php////////////////////////////////////
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
 
-## Security Vulnerabilities
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+step 5://////////////////////////////////////////////////////////
+<!doctype html>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{{ config('app.name', 'Laravel') }}</title>
+    <link rel="dns-prefetch" href="//fonts.bunny.net">
+    <link href="https://fonts.bunny.net/css?family=Nunito" rel="stylesheet">
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Toastr CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet">
+    @vite(['resources/sass/app.scss', 'resources/js/app.js'])
+</head>
+<body>
+    <div id="app">
+        <nav class="navbar navbar-expand-md navbar-light bg-white shadow-sm">
+            <div class="container">
+                <a class="navbar-brand" href="{{ url('/') }}">
+                    {{ config('app.name', 'Laravel') }}
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="{{ __('Toggle navigation') }}">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                    <ul class="navbar-nav me-auto"></ul>
+                    <ul class="navbar-nav ms-auto">
+                        <!-- Authentication Links -->
+                        @guest
+                            @if (Route::has('login'))
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ route('login') }}">{{ __('Login') }}</a>
+                                </li>
+                            @endif
+                            @if (Route::has('register'))
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ route('register') }}">{{ __('Register') }}</a>
+                                </li>
+                            @endif
+                        @else
+                            <li class="nav-item dropdown">
+                                <a id="navbarDropdown" class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" v-pre>
+                                    {{ Auth::user()->name }}
+                                </a>
+                                <div class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                                    <a class="dropdown-item" href="{{ route('logout') }}"
+                                       onclick="event.preventDefault();
+                                                     document.getElementById('logout-form').submit();">
+                                        {{ __('Logout') }}
+                                    </a>
+                                    <form id="logout-form" action="{{ route('logout') }}" method="POST" class="d-none">
+                                        @csrf
+                                    </form>
+                                </div>
+                            </li>
+                        @endguest
+                    </ul>
+                </div>
+            </div>
+        </nav>
 
-## License
+        <main class="py-4">
+            @yield('content')
+        </main>
+    </div>
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+    <!-- Toastr JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+    <script>
+        // Initialize Toastr with Custom Options
+        toastr.options = {
+            closeButton: true,
+            progressBar: true,
+            positionClass: 'toast-top-right',
+            timeOut: 5000,
+            extendedTimeOut: 1000,
+            showEasing: 'swing',
+            hideEasing: 'linear',
+            showMethod: 'fadeIn',
+            hideMethod: 'fadeOut',
+        };
+
+        // WebSocket connection
+        const socket = new WebSocket('ws://127.0.0.1:8080');
+
+        socket.onmessage = function(event) {
+            const message = JSON.parse(event.data);
+            if (message.event === 'user_registered') {
+                toastr.success(`New user registered: ${message.data.name} (${message.data.email})`);
+            }
+        };
+
+        socket.onopen = function() {
+            console.log('WebSocket connection established');
+        };
+
+        socket.onclose = function() {
+            console.log('WebSocket connection closed');
+        };
+
+        // Example Toastr Test Messages
+        setTimeout(() => {
+            toastr.success('Success! This is a colorful toast.');
+            toastr.info('Info! This is a blue notification.');
+            toastr.warning('Warning! Check this out.');
+            toastr.error('Error! Something went wrong.');
+        }, 2000);
+    </script>
+
+</body>
+</html>
+<style>
+    /* Success - Green with Gradient */
+    .toast-success {
+        background: linear-gradient(135deg, #28a745, #74d680);
+        color: white !important;
+    }
+
+    /* Info - Blue with Gradient */
+    .toast-info {
+        background: linear-gradient(135deg, #007bff, #6bb9f0);
+        color: white !important;
+    }
+
+    /* Warning - Orange with Gradient */
+    .toast-warning {
+        background: linear-gradient(135deg, #ffc107, #ffdd67);
+        color: black !important;
+    }
+
+    /* Error - Red with Gradient */
+    .toast-error {
+        background: linear-gradient(135deg, #dc3545, #ff6b6b);
+        color: white !important;
+    }
+
+    /* Toast Title Styling */
+    .toast-title {
+        font-weight: bold;
+        font-size: 16px;
+    }
+
+    /* Toast Message Styling */
+    .toast-message {
+        font-size: 14px;
+    }
+
+    /* Adding Box Shadow */
+    .toast {
+    background-color: rgba(0, 0, 0, 0.85) !important;
+    opacity: 1 !important;
+}
+</style>
+
+
+
+step:5////////////////////////////////////////////////////////////////////////
+Register controller
+<?php
+
+namespace App\Http\Controllers\Auth;
+
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use Illuminate\Foundation\Auth\RegistersUsers;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
+use WebSocket\Client; // Add this line
+
+class RegisterController extends Controller
+{
+    use RegistersUsers;
+
+    protected $redirectTo = '/home';
+
+    public function __construct()
+    {
+        $this->middleware('guest');
+    }
+
+    protected function validator(array $data)
+    {
+        return Validator::make($data, [
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+    }
+
+    protected function create(array $data)
+    {
+        // Create the user
+        $user = User::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => Hash::make($data['password']),
+        ]);
+
+        // Send WebSocket notification
+        $client = new Client("ws://127.0.0.1:8080");
+        $client->send(json_encode([
+            'event' => 'user_registered',
+            'data' => [
+                'user_id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+            ],
+        ]));
+        $client->close();
+
+        // Return the created user
+        return $user;
+    }
+}
+
+step 6: composer require textalk/websocket///////////////////////
+step 8: php artisan serve///////////////////////////////////////
+step 9: php ratchet_server.php//////////////////////////////////
